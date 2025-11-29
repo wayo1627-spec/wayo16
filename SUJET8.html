@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Windows Server - Dossier E5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; }
+        .win-window { box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .win-header { background-color: #ffffff; border-bottom: 1px solid #d1d1d1; }
+        .tree-item:hover { background-color: #cce8ff; cursor: default; }
+        .selected-tree { background-color: #cce8ff; border: 1px dotted #333; }
+        .dialog-overlay { background: rgba(0,0,0,0.4); }
+        .win-btn { border: 1px solid #adadad; background: #e1e1e1; min-width: 75px; }
+        .win-btn:hover { border-color: #0078d7; background: #e5f1fb; }
+        .win-btn-primary { border: 1px solid #0078d7; background: #e1e1e1; box-shadow: inset 0 0 0 1px #0078d7; }
+        
+        /* Specific Tab Styling */
+        .tab-btn.active { background-color: #f0f0f0; border-bottom: 2px solid #0078d7; color: #000; font-weight: 600; }
+        .tab-btn { color: #666; }
+
+        /* Disk Mgmt Styling */
+        .disk-row { display: flex; margin-bottom: 8px; }
+        .disk-info { width: 120px; background: #f0f0f0; border: 1px solid #999; padding: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; margin-right: 4px; }
+        .disk-part { background: #fff; border: 1px solid #999; border-top: 4px solid #000080; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 60px; }
+        .disk-part.primary { border-top-color: #000080; background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIi8+CjxwYXRoIGQ9Ik0wIDBMNCA0Wk00IDBMMCA0WiIgc3Ryb2tlPSIjZWVlIiBzdHJva2Utd2lkdGg9IjEiLz4KPC9zdmc+'); }
+        .disk-part-label { font-weight: bold; font-size: 13px; }
+        .disk-part-sub { font-size: 11px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center p-4 bg-gray-800">
+
+    <div class="mb-4 text-center text-white">
+        <h1 class="text-2xl font-bold mb-2">Générateur de Preuves Techniques (E5)</h1>
+        <p class="text-gray-300 text-sm">Cliquez sur un onglet, puis faites `Windows + Maj + S` pour capturer l'écran.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="w-full max-w-5xl bg-gray-200 rounded-t-lg flex overflow-hidden border-b border-gray-300 overflow-x-auto">
+        <button onclick="switchTab('storage')" id="tab-storage" class="tab-btn active flex-1 py-3 px-4 hover:bg-gray-100 transition whitespace-nowrap">
+            <i class="fas fa-hdd mr-2"></i>1. Stockage
+        </button>
+        <button onclick="switchTab('ntfs')" id="tab-ntfs" class="tab-btn flex-1 py-3 px-4 hover:bg-gray-100 transition whitespace-nowrap">
+            <i class="fas fa-shield-alt mr-2"></i>2. NTFS
+        </button>
+        <button onclick="switchTab('abe')" id="tab-abe" class="tab-btn flex-1 py-3 px-4 hover:bg-gray-100 transition whitespace-nowrap">
+            <i class="fas fa-eye-slash mr-2"></i>3. ABE
+        </button>
+        <button onclick="switchTab('fsrm')" id="tab-fsrm" class="tab-btn flex-1 py-3 px-4 hover:bg-gray-100 transition whitespace-nowrap">
+            <i class="fas fa-ban mr-2"></i>4. FSRM
+        </button>
+        <button onclick="switchTab('backup')" id="tab-backup" class="tab-btn flex-1 py-3 px-4 hover:bg-gray-100 transition whitespace-nowrap">
+            <i class="fas fa-save mr-2"></i>5. Sauvegarde
+        </button>
+    </div>
+
+    <!-- Main Window Container -->
+    <div class="w-full max-w-5xl h-[600px] bg-white rounded-b-lg win-window relative overflow-hidden flex flex-col">
+        
+        <!-- Header Mockup -->
+        <div class="h-8 bg-white flex items-center justify-between px-3 border-b border-gray-200 select-none">
+            <div class="flex items-center text-xs text-gray-700">
+                <img src="https://img.icons8.com/color/48/server.png" class="h-4 w-4 mr-2" alt="icon">
+                <span id="window-title">Gestion des disques</span>
+            </div>
+            <div class="flex space-x-2">
+                <div class="w-3 h-1 bg-gray-400"></div>
+                <div class="w-3 h-3 border border-gray-400"></div>
+                <div class="w-3 h-3 bg-red-400 text-white flex items-center justify-center text-[8px]">X</div>
+            </div>
+        </div>
+
+        <!-- CONTENT: STORAGE (New) -->
+        <div id="content-storage" class="view-content flex flex-col h-full bg-white font-sans text-sm">
+             <!-- Toolbar -->
+             <div class="bg-gray-100 border-b border-gray-300 p-1 flex space-x-2 text-xs">
+                <div class="px-2 py-1">Fichier</div>
+                <div class="px-2 py-1">Action</div>
+                <div class="px-2 py-1">Affichage</div>
+                <div class="px-2 py-1">Aide</div>
+            </div>
+            
+            <div class="p-4 flex-1 overflow-y-auto bg-white">
+                <div class="text-sm font-bold mb-4 text-gray-700">Volume (C:, E:, F:)</div>
+                
+                <!-- Disk 0 -->
+                <div class="disk-row">
+                    <div class="disk-info">
+                        <div class="font-bold text-xs">Disque 0</div>
+                        <div class="text-xs">De base</div>
+                        <div class="text-xs">60,00 Go</div>
+                        <div class="text-xs">En ligne</div>
+                    </div>
+                    <div class="disk-part primary w-full">
+                        <div class="disk-part-label">(C:) Système</div>
+                        <div class="disk-part-sub">60,00 Go NTFS</div>
+                        <div class="disk-part-sub">Sain (Démarrer, Fichier d'échange, Vidage sur incident, Partition principale)</div>
+                    </div>
+                </div>
+
+                <!-- Disk 1 -->
+                <div class="disk-row">
+                    <div class="disk-info">
+                        <div class="font-bold text-xs">Disque 1</div>
+                        <div class="text-xs">De base</div>
+                        <div class="text-xs">100,00 Go</div>
+                        <div class="text-xs">En ligne</div>
+                    </div>
+                    <div class="disk-part primary w-full bg-blue-50">
+                        <div class="disk-part-label">Partage_Entreprise (E:)</div>
+                        <div class="disk-part-sub">100,00 Go NTFS</div>
+                        <div class="disk-part-sub">Sain (Partition principale)</div>
+                    </div>
+                </div>
+
+                <!-- Disk 2 -->
+                <div class="disk-row">
+                    <div class="disk-info">
+                        <div class="font-bold text-xs">Disque 2</div>
+                        <div class="text-xs">De base</div>
+                        <div class="text-xs">150,00 Go</div>
+                        <div class="text-xs">En ligne</div>
+                    </div>
+                    <div class="disk-part primary w-full bg-blue-50">
+                        <div class="disk-part-label">Sauvegardes (F:)</div>
+                        <div class="disk-part-sub">150,00 Go NTFS</div>
+                        <div class="disk-part-sub">Sain (Partition principale)</div>
+                    </div>
+                </div>
+
+                <!-- CD-ROM -->
+                <div class="disk-row">
+                    <div class="disk-info bg-gray-200">
+                        <div class="font-bold text-xs">CD-ROM 0</div>
+                        <div class="text-xs">DVD (D:)</div>
+                        <div class="text-xs">Aucun média</div>
+                    </div>
+                    <div class="disk-part bg-gray-100 border-none flex-1">
+                    </div>
+                </div>
+
+            </div>
+            
+             <div class="absolute bottom-4 right-4 bg-blue-100 border border-blue-400 p-2 rounded text-xs w-64 shadow">
+                <strong>Preuve Étape 1 :</strong> Cette vue valide la "Topologie Physique" décrite dans ton dossier (3 disques distincts pour OS, Data, Backup).
+            </div>
+        </div>
+
+        <!-- CONTENT: NTFS -->
+        <div id="content-ntfs" class="view-content hidden flex-1 bg-white p-4 font-sans text-sm">
+            <div class="w-[450px] mx-auto border border-gray-300 shadow-lg bg-white h-full flex flex-col">
+                <!-- Tabs -->
+                <div class="flex bg-white border-b border-gray-300 mt-2 px-2">
+                    <div class="px-3 py-1 border border-b-0 border-gray-300 bg-white -mb-px z-10">Sécurité</div>
+                    <div class="px-3 py-1 border-b border-gray-300 text-gray-500">Partage</div>
+                    <div class="px-3 py-1 border-b border-gray-300 text-gray-500">Général</div>
+                </div>
+                
+                <div class="p-4 flex-1 flex flex-col">
+                    <p class="mb-2">Nom de l'objet : <span class="text-gray-500">E:\Partage_Entreprise\Comptabilité</span></p>
+                    
+                    <p class="mb-1">Noms de groupes ou d'utilisateurs :</p>
+                    <div class="border border-gray-400 h-32 overflow-y-auto bg-white mb-4">
+                        <div class="flex items-center px-2 py-1">
+                            <i class="fas fa-user-shield text-yellow-600 mr-2"></i> SYSTEM
+                        </div>
+                        <div class="flex items-center px-2 py-1">
+                            <i class="fas fa-user-tie text-blue-600 mr-2"></i> Administrateurs
+                        </div>
+                        <div class="flex items-center px-2 py-1 bg-blue-100 border border-dotted border-gray-400">
+                            <i class="fas fa-users text-blue-600 mr-2"></i> G_Compta (SISR-CORP\G_Compta)
+                        </div>
+                    </div>
+
+                    <p class="mb-1">Autorisations pour G_Compta :</p>
+                    <div class="border border-gray-400 h-40 overflow-y-scroll bg-white relative">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-100 border-b border-gray-300">
+                                <tr>
+                                    <th class="pl-2 py-1 font-normal">Autorisations</th>
+                                    <th class="w-12 text-center font-normal">Autoriser</th>
+                                    <th class="w-12 text-center font-normal">Refuser</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="pl-2">Contrôle total</td><td class="text-center"><input type="checkbox" disabled></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                                <tr><td class="pl-2">Modification</td><td class="text-center"><input type="checkbox" checked disabled class="accent-gray-500"></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                                <tr><td class="pl-2">Lecture et exécution</td><td class="text-center"><input type="checkbox" checked disabled class="accent-gray-500"></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                                <tr><td class="pl-2">Affichage du contenu</td><td class="text-center"><input type="checkbox" checked disabled class="accent-gray-500"></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                                <tr><td class="pl-2">Lecture</td><td class="text-center"><input type="checkbox" checked disabled class="accent-gray-500"></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                                <tr><td class="pl-2">Écriture</td><td class="text-center"><input type="checkbox" checked disabled class="accent-gray-500"></td><td class="text-center"><input type="checkbox" disabled></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="flex justify-end mt-4 space-x-2">
+                        <button class="win-btn px-4 py-1">OK</button>
+                        <button class="win-btn px-4 py-1">Annuler</button>
+                        <button class="win-btn px-4 py-1" disabled>Appliquer</button>
+                    </div>
+                </div>
+            </div>
+            <div class="absolute bottom-4 right-4 bg-yellow-100 border border-yellow-400 p-2 rounded text-xs w-64 shadow">
+                <strong>Preuve Étape 2 :</strong> ACLs propres. Note l'absence du groupe "Utilisateurs" (Héritage cassé).
+            </div>
+        </div>
+
+        <!-- CONTENT: ABE -->
+        <div id="content-abe" class="view-content hidden h-full flex flex-col bg-gray-100 font-sans text-sm">
+            <div class="bg-white border-b border-gray-300 p-4 flex items-center">
+                <i class="fas fa-share-alt text-2xl text-blue-600 mr-4"></i>
+                <div>
+                    <h2 class="text-lg text-blue-800 font-light">Assistant Création de partage</h2>
+                    <p class="text-xs text-gray-600">Configuration des paramètres de partage SMB</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-1 p-6">
+                <!-- Sidebar steps -->
+                <div class="w-48 border-r border-gray-300 pr-4 space-y-4 text-gray-500">
+                    <div class="flex items-center"><div class="w-6 h-6 rounded-full border border-gray-400 text-center mr-2 text-xs leading-6">1</div>Profil</div>
+                    <div class="flex items-center"><div class="w-6 h-6 rounded-full border border-gray-400 text-center mr-2 text-xs leading-6">2</div>Emplacement</div>
+                    <div class="flex items-center"><div class="w-6 h-6 rounded-full border border-gray-400 text-center mr-2 text-xs leading-6">3</div>Nom</div>
+                    <div class="flex items-center font-bold text-blue-600"><div class="w-6 h-6 rounded-full bg-blue-600 text-white text-center mr-2 text-xs leading-6">4</div>Paramètres</div>
+                    <div class="flex items-center"><div class="w-6 h-6 rounded-full border border-gray-400 text-center mr-2 text-xs leading-6">5</div>Autorisations</div>
+                </div>
+
+                <!-- Form -->
+                <div class="flex-1 pl-6">
+                    <h3 class="font-bold mb-4">Spécifier d'autres paramètres pour ce partage</h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <input type="checkbox" id="abe-check" checked class="mt-1 mr-2 h-4 w-4 text-blue-600">
+                            <div>
+                                <label for="abe-check" class="font-bold">Activer l'énumération basée sur l'accès</label>
+                                <p class="text-gray-500 text-xs mt-1 w-96">L'énumération basée sur l'accès n'affiche que les fichiers et dossiers pour lesquels un utilisateur dispose d'autorisations d'accès. Si un utilisateur n'a pas d'autorisations de lecture (ou équivalentes) pour un dossier, Windows masque le dossier.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start opacity-60">
+                            <input type="checkbox" class="mt-1 mr-2 h-4 w-4">
+                            <div>
+                                <label class="font-bold">Autoriser la mise en cache du partage</label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start opacity-60">
+                            <input type="checkbox" class="mt-1 mr-2 h-4 w-4">
+                            <div>
+                                <label class="font-bold">Chiffrer l'accès aux données</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-100 border-t border-gray-300 p-4 flex justify-end space-x-2">
+                <button class="win-btn px-6 py-1">< Précédent</button>
+                <button class="win-btn-primary px-6 py-1 text-black font-normal">Suivant ></button>
+                <button class="win-btn px-6 py-1">Annuler</button>
+            </div>
+            
+            <div class="absolute bottom-20 right-10 bg-blue-100 border border-blue-400 p-2 rounded text-xs w-64 shadow">
+                <strong>Preuve Étape 3 :</strong> C'est cette case "Activer l'énumération basée sur l'accès" (ABE) qui est la clé.
+            </div>
+        </div>
+
+        <!-- CONTENT: FSRM -->
+        <div id="content-fsrm" class="view-content hidden h-full flex flex-col font-sans text-sm bg-white">
+            <!-- MMC Toolbar -->
+            <div class="bg-gray-100 border-b border-gray-300 p-1 flex space-x-2 text-xs">
+                <div class="px-2 py-1 hover:bg-gray-300 border border-transparent hover:border-gray-400">Fichier</div>
+                <div class="px-2 py-1 hover:bg-gray-300 border border-transparent hover:border-gray-400">Action</div>
+                <div class="px-2 py-1 hover:bg-gray-300 border border-transparent hover:border-gray-400">Affichage</div>
+            </div>
+            
+            <div class="flex flex-1 overflow-hidden">
+                <!-- MMC Tree -->
+                <div class="w-64 border-r border-gray-300 bg-white p-2 text-sm overflow-y-auto">
+                    <div class="flex items-center text-gray-700 font-bold mb-1">
+                        <i class="fas fa-server mr-2"></i> Gestionnaire de ressources (SRV-DATA)
+                    </div>
+                    <div class="pl-4">
+                        <div class="flex items-center py-1">
+                            <i class="fas fa-chart-pie text-yellow-500 mr-2"></i> Gestion de quotas
+                        </div>
+                        <div class="pl-6">
+                            <div class="flex items-center py-1 text-blue-600 bg-blue-50 border border-dotted border-blue-200">
+                                <i class="fas fa-list mr-2"></i> Quotas
+                            </div>
+                            <div class="flex items-center py-1">
+                                <i class="fas fa-file-alt mr-2"></i> Modèles de quotas
+                            </div>
+                        </div>
+                        <div class="flex items-center py-1 mt-2">
+                            <i class="fas fa-filter text-green-600 mr-2"></i> Gestion du filtrage
+                        </div>
+                        <div class="pl-6">
+                            <div class="flex items-center py-1">
+                                <i class="fas fa-ban mr-2"></i> Filtres de fichiers
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MMC Content -->
+                <div class="flex-1 bg-white p-2">
+                    <h2 class="text-sm font-bold mb-2 pb-2 border-b border-gray-300">Quotas</h2>
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-white border-b-2 border-gray-300 text-gray-600">
+                            <tr>
+                                <th class="py-1 px-2 font-normal w-6"></th>
+                                <th class="py-1 px-2 font-normal">Chemin du quota</th>
+                                <th class="py-1 px-2 font-normal">Limite</th>
+                                <th class="py-1 px-2 font-normal">% utilisé</th>
+                                <th class="py-1 px-2 font-normal">Type</th>
+                                <th class="py-1 px-2 font-normal">Correspondance source</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="hover:bg-blue-50 group">
+                                <td class="py-1 px-2"><i class="fas fa-chart-pie text-yellow-500"></i></td>
+                                <td class="py-1 px-2 font-bold group-hover:text-blue-800">E:\Partage_Entreprise\Comptabilité</td>
+                                <td class="py-1 px-2">5,00 Go</td>
+                                <td class="py-1 px-2 text-green-600">12%</td>
+                                <td class="py-1 px-2">Inconditionnel</td>
+                                <td class="py-1 px-2">Limite 5 Go</td>
+                            </tr>
+                            <tr class="hover:bg-blue-50">
+                                <td class="py-1 px-2"><i class="fas fa-chart-pie text-yellow-500"></i></td>
+                                <td class="py-1 px-2">E:\Partage_Entreprise\Direction</td>
+                                <td class="py-1 px-2">10,00 Go</td>
+                                <td class="py-1 px-2 text-green-600">45%</td>
+                                <td class="py-1 px-2">Inconditionnel</td>
+                                <td class="py-1 px-2">Limite 10 Go</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h2 class="text-sm font-bold mt-8 mb-2 pb-2 border-b border-gray-300">Filtres de fichiers actifs</h2>
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-white border-b-2 border-gray-300 text-gray-600">
+                            <tr>
+                                <th class="py-1 px-2 font-normal w-6"></th>
+                                <th class="py-1 px-2 font-normal">Chemin du fichier</th>
+                                <th class="py-1 px-2 font-normal">Type</th>
+                                <th class="py-1 px-2 font-normal">Groupes de fichiers</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="hover:bg-blue-50">
+                                <td class="py-1 px-2"><i class="fas fa-filter text-green-600"></i></td>
+                                <td class="py-1 px-2 font-bold">E:\Partage_Entreprise</td>
+                                <td class="py-1 px-2">Actif</td>
+                                <td class="py-1 px-2 text-red-600">Fichiers audio et vidéo, Anti-Ransomware</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- MMC Actions Pane -->
+                <div class="w-48 bg-gray-50 border-l border-gray-300 p-2 text-xs hidden md:block">
+                    <div class="font-bold mb-2">Actions</div>
+                    <div class="py-1 px-2 hover:bg-gray-200 cursor-pointer text-gray-700">Créer un quota...</div>
+                    <div class="py-1 px-2 hover:bg-gray-200 cursor-pointer text-gray-700">Créer un filtre...</div>
+                    <div class="border-t border-gray-300 my-2"></div>
+                    <div class="py-1 px-2 hover:bg-gray-200 cursor-pointer text-gray-700">Affichage</div>
+                </div>
+            </div>
+            <div class="absolute bottom-4 right-4 bg-green-100 border border-green-400 p-2 rounded text-xs w-64 shadow">
+                <strong>Preuve Étape 4 :</strong> Cette vue combinée montre les deux fonctions clés du FSRM (Quotas + Filtres) en une seule image.
+            </div>
+        </div>
+
+        <!-- CONTENT: BACKUP -->
+        <div id="content-backup" class="view-content hidden h-full flex flex-col font-sans text-sm bg-white">
+             <!-- Header -->
+             <div class="bg-gray-100 border-b border-gray-300 p-2 text-sm flex items-center">
+                <i class="fas fa-save mr-2 text-purple-700"></i> Sauvegarde Windows Server
+            </div>
+
+            <div class="flex flex-1 p-4 bg-white">
+                <div class="w-full border border-gray-300">
+                    <div class="bg-blue-800 text-white px-2 py-1 font-bold text-xs">
+                        État de la sauvegarde (Locale)
+                    </div>
+                    
+                    <div class="p-4 grid grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Dernière sauvegarde</h3>
+                            <div class="flex items-center mb-2">
+                                <div class="bg-green-500 rounded-full p-2 mr-3 text-white">
+                                    <i class="fas fa-check"></i>
+                                </div>
+                                <div>
+                                    <div class="font-bold">Réussite</div>
+                                    <div class="text-xs text-gray-500">Hier à 22:00</div>
+                                </div>
+                            </div>
+                            <div class="text-xs space-y-1">
+                                <div class="flex justify-between"><span class="text-gray-500">Description :</span> <span>Planifiée</span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">Cible :</span> <span>Disque Local (F:)</span></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Prochaine sauvegarde</h3>
+                            <div class="flex items-center mb-2">
+                                <div class="bg-blue-500 rounded-full p-2 mr-3 text-white w-8 h-8 flex items-center justify-center text-xs">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div>
+                                    <div class="font-bold">Aujourd'hui à 22:00</div>
+                                    <div class="text-xs text-gray-500">Sauvegarde planifiée</div>
+                                </div>
+                            </div>
+                             <div class="text-xs space-y-1 mt-4">
+                                <div class="flex justify-between border-b border-dotted pb-1">
+                                    <span class="text-gray-500">Éléments :</span> 
+                                    <span class="font-bold">Volume (E:)</span>
+                                </div>
+                                <div class="flex justify-between border-b border-dotted pb-1 pt-1">
+                                    <span class="text-gray-500">Type :</span> 
+                                    <span>VSS Complète</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-100 p-2 text-xs border-t border-gray-300 mt-4 mx-4 mb-4">
+                        <strong>Détails :</strong> La sauvegarde est configurée pour utiliser le disque dédié F: en mode bloc.
+                    </div>
+
+                </div>
+            </div>
+            
+            <div class="absolute bottom-4 right-4 bg-green-100 border border-green-400 p-2 rounded text-xs w-64 shadow">
+                <strong>Preuve Étape 5 :</strong> La configuration de sauvegarde montre bien la cible dédiée (F:) et la source (E:), validant la stratégie de résilience.
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all contents
+            document.querySelectorAll('.view-content').forEach(el => el.classList.add('hidden'));
+            // Remove active state from tabs
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active', 'border-b-2', 'border-blue-600', 'text-black', 'font-600'));
+            
+            // Show selected content
+            document.getElementById('content-' + tabName).classList.remove('hidden');
+            
+            // Add active state to selected tab
+            const activeBtn = document.getElementById('tab-' + tabName);
+            activeBtn.classList.add('active');
+            
+            // Update Mockup Title
+            const titleEl = document.getElementById('window-title');
+            if(tabName === 'storage') titleEl.innerText = "Gestion des disques";
+            if(tabName === 'ntfs') titleEl.innerText = "Propriétés de : Partage_Entreprise";
+            if(tabName === 'abe') titleEl.innerText = "Assistant Création de partage";
+            if(tabName === 'fsrm') titleEl.innerText = "Gestionnaire de ressources du serveur de fichiers";
+            if(tabName === 'backup') titleEl.innerText = "Sauvegarde Windows Server (Local)";
+        }
+    </script>
+</body>
+</html>
